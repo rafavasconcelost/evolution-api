@@ -4464,6 +4464,15 @@ export class BaileysStartupService extends ChannelStartupService {
 
       const picture = await this.profilePicture(group.id);
 
+      // Enrich participants with phoneNumber resolved from LID via Baileys'
+      // signalRepository. With WhatsApp privacy ON, group participants come as
+      // LIDs ("123@lid"); CRMs need the real phone JID to display members.
+      // Mirrors the enrichment pattern already used in group-participants.update
+      // webhook handler. Resolution is best-effort — when getPNForLID returns
+      // null (LID never seen via signal/cripto sync), phoneNumber stays
+      // undefined and caller falls back to whatever it does today.
+      const enrichedParticipants = await this.enrichParticipantsWithPhone(group.participants);
+
       return {
         id: group.id,
         subject: group.subject,
@@ -4477,7 +4486,7 @@ export class BaileysStartupService extends ChannelStartupService {
         descId: group.descId,
         restrict: group.restrict,
         announce: group.announce,
-        participants: group.participants,
+        participants: enrichedParticipants,
         isCommunity: group.isCommunity,
         isCommunityAnnounce: group.isCommunityAnnounce,
         linkedParent: group.linkedParent,
@@ -4488,6 +4497,32 @@ export class BaileysStartupService extends ChannelStartupService {
       }
       throw new NotFoundException('Error fetching group', error.toString());
     }
+  }
+
+  private async enrichParticipantsWithPhone<T extends { id: string; phoneNumber?: string }>(
+    participants: T[],
+  ): Promise<T[]> {
+    const enriched = await Promise.all(
+      participants.map(async (p) => {
+        if (p.phoneNumber) return p;
+        if (!p.id?.endsWith('@lid')) return p;
+        try {
+          const pn = await this.client.signalRepository.lidMapping.getPNForLID(p.id);
+          if (pn && typeof pn === 'string' && pn.endsWith('@s.whatsapp.net')) {
+            // Baileys returns "${user}:${device}@s.whatsapp.net"; strip device
+            // suffix so consumers get a clean E.164-style identifier.
+            const phone = pn.split('@')[0]?.split(':')[0];
+            if (phone && /^\d+$/.test(phone)) {
+              return { ...p, phoneNumber: phone };
+            }
+          }
+        } catch {
+          // No-op: LID not in mapping cache yet. Caller decides fallback.
+        }
+        return p;
+      }),
+    );
+    return enriched;
   }
 
   public async fetchAllGroups(getParticipants: GetParticipant) {
@@ -4598,12 +4633,18 @@ export class BaileysStartupService extends ChannelStartupService {
         };
       });
 
-      const usersContacts = parsedParticipants.filter((c) => c.id.includes('@s.whatsapp'));
+      // Enrich LID participants with phoneNumber via signalRepository (same as
+      // findGroup). The pre-existing group-participants.update webhook handler
+      // already does this lookup against findParticipants() — by enriching
+      // here at the source, both the webhook and direct REST callers benefit.
+      const enrichedParticipants = await this.enrichParticipantsWithPhone(parsedParticipants);
+
+      const usersContacts = enrichedParticipants.filter((c) => c.id.includes('@s.whatsapp'));
       if (usersContacts) {
         await saveOnWhatsappCache(usersContacts.map((c) => ({ remoteJid: c.id })));
       }
 
-      return { participants: parsedParticipants };
+      return { participants: enrichedParticipants };
     } catch (error) {
       console.error(error);
       throw new NotFoundException('No participants', error.toString());
