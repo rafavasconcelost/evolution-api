@@ -4502,19 +4502,36 @@ export class BaileysStartupService extends ChannelStartupService {
   private async enrichParticipantsWithPhone<T extends { id: string; phoneNumber?: string }>(
     participants: T[],
   ): Promise<T[]> {
+    // Normalize anything Baileys can emit into a bare E.164 digit string.
+    // Accepts: "55119...", "55119...@s.whatsapp.net", "55119...:0@s.whatsapp.net".
+    // Returns null if input doesn't match. Centralizing this here means CRMs
+    // get a consistent, safe-to-regex phoneNumber regardless of whether the
+    // value came pre-populated from Baileys' Contact cache or from our own
+    // getPNForLID resolution below.
+    const toE164 = (raw: string | null | undefined): string | null => {
+      if (typeof raw !== 'string' || raw.length === 0) return null;
+      const phone = raw.split('@')[0]?.split(':')[0];
+      return phone && /^\d+$/.test(phone) ? phone : null;
+    };
+
     const enriched = await Promise.all(
       participants.map(async (p) => {
-        if (p.phoneNumber) return p;
+        // (1) If Baileys already populated phoneNumber, normalize and return —
+        // don't waste a getPNForLID call. This is the common case after
+        // signal/cripto sync has run and Baileys' Contact cache holds the
+        // mapping.
+        const preNormalized = toE164(p.phoneNumber);
+        if (preNormalized) {
+          return { ...p, phoneNumber: preNormalized };
+        }
+        // (2) Phone JID participants don't need LID resolution.
         if (!p.id?.endsWith('@lid')) return p;
+        // (3) LID without phoneNumber — try to resolve via signalRepository.
         try {
           const pn = await this.client.signalRepository.lidMapping.getPNForLID(p.id);
-          if (pn && typeof pn === 'string' && pn.endsWith('@s.whatsapp.net')) {
-            // Baileys returns "${user}:${device}@s.whatsapp.net"; strip device
-            // suffix so consumers get a clean E.164-style identifier.
-            const phone = pn.split('@')[0]?.split(':')[0];
-            if (phone && /^\d+$/.test(phone)) {
-              return { ...p, phoneNumber: phone };
-            }
+          const phone = toE164(typeof pn === 'string' ? pn : null);
+          if (phone) {
+            return { ...p, phoneNumber: phone };
           }
         } catch {
           // No-op: LID not in mapping cache yet. Caller decides fallback.
