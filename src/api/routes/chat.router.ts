@@ -4,6 +4,7 @@ import {
   BlockUserDto,
   DeleteMessage,
   getBase64FromMediaMessageDto,
+  LidToPhoneDto,
   MarkChatUnreadDto,
   MarkMessageAsPlayedDto,
   NumberDto,
@@ -25,6 +26,7 @@ import {
   blockUserSchema,
   contactValidateSchema,
   deleteMessageSchema,
+  lidToPhoneSchema,
   markChatUnreadSchema,
   markMessageAsPlayedSchema,
   messageUpSchema,
@@ -81,6 +83,16 @@ export class ChatRouter extends RouterBroker {
         });
 
         return res.status(HttpStatus.CREATED).json(response);
+      })
+      .post(this.routerPath('lidToPhone'), ...guards, async (req, res) => {
+        const response = await this.dataValidate<LidToPhoneDto>({
+          request: req,
+          schema: lidToPhoneSchema,
+          ClassRef: LidToPhoneDto,
+          execute: (instance, data) => chatController.lidToPhone(instance, data),
+        });
+
+        return res.status(HttpStatus.OK).json(response);
       })
       .post(this.routerPath('archiveChat'), ...guards, async (req, res) => {
         const response = await this.dataValidate<ArchiveChatDto>({

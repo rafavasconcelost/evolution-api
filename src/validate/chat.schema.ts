@@ -85,6 +85,16 @@ export const markMessageAsPlayedSchema: JSONSchema7 = {
   required: ['playedMessages'],
 };
 
+export const lidToPhoneSchema: JSONSchema7 = {
+  $id: v4(),
+  type: 'object',
+  properties: {
+    lid: { type: 'string' },
+  },
+  required: ['lid'],
+  ...isNotEmpty('lid'),
+};
+
 export const archiveChatSchema: JSONSchema7 = {
   $id: v4(),
   type: 'object',

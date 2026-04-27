@@ -3707,6 +3707,32 @@ export class BaileysStartupService extends ChannelStartupService {
     }
   }
 
+  public async lidToPhone(data: { lid: string }) {
+    // Resolves a WhatsApp LID (privacy-protected addressing) to its real phone
+    // JID using Baileys' native signalRepository.lidMapping.getPNForLID. The
+    // mapping is populated whenever the connection has exchanged signal keys
+    // with that user (history sync, group encryption, prior messages) — covers
+    // members who never sent a message but exist in groups the instance is
+    // part of (encryption keys are shared at group join).
+    //
+    // CRMs handling group conversations need this to display real phone numbers
+    // instead of the synthetic LID hash retornado by /group/findGroupInfos when
+    // privacy is on. Without this, group member lists show opaque IDs forever.
+    //
+    // Returns null when the mapping isn't available (rare — LID seen for the
+    // first time without any prior signal interaction). Caller should treat
+    // null as "still unknown, retry later" rather than as error.
+    try {
+      const lid = data.lid?.trim();
+      if (!lid) return { lid: null, pn: null };
+      const normalized = lid.endsWith('@lid') ? lid : `${lid}@lid`;
+      const pn = await this.client.signalRepository.lidMapping.getPNForLID(normalized);
+      return { lid: normalized, pn: pn ?? null };
+    } catch (error) {
+      throw new InternalServerErrorException('LID to phone resolution failed', error.toString());
+    }
+  }
+
   public async getLastMessage(number: string) {
     const where: any = { key: { remoteJid: number }, instanceId: this.instance.id };
 

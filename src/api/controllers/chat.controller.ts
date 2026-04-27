@@ -3,6 +3,7 @@ import {
   BlockUserDto,
   DeleteMessage,
   getBase64FromMediaMessageDto,
+  LidToPhoneDto,
   MarkChatUnreadDto,
   MarkMessageAsPlayedDto,
   NumberDto,
@@ -33,6 +34,10 @@ export class ChatController {
 
   public async markMessageAsPlayed({ instanceName }: InstanceDto, data: MarkMessageAsPlayedDto) {
     return await this.waMonitor.waInstances[instanceName].markMessageAsPlayed(data);
+  }
+
+  public async lidToPhone({ instanceName }: InstanceDto, data: LidToPhoneDto) {
+    return await this.waMonitor.waInstances[instanceName].lidToPhone(data);
   }
 
   public async archiveChat({ instanceName }: InstanceDto, data: ArchiveChatDto) {

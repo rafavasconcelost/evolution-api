@@ -74,6 +74,10 @@ export class MarkMessageAsPlayedDto {
   playedMessages: Key[];
 }
 
+export class LidToPhoneDto {
+  lid: string;
+}
+
 export class LastMessage {
   key: Key;
   messageTimestamp?: number;
