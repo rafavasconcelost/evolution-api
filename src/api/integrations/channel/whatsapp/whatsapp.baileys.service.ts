@@ -1173,6 +1173,25 @@ export class BaileysStartupService extends ChannelStartupService {
             }
           }
 
+          // Stub events (group rename, member add/remove/leave, etc) come in
+          // `messages.upsert` with `messageStubType` set and `message` null.
+          // The original guard below skipped them entirely, silently dropping
+          // critical group activity events that CRMs need to render timeline
+          // bubbles ("X renamed the group to Y", "X was added", etc).
+          //
+          // Forward the raw payload as a `messages.upsert` webhook (the
+          // canonical event name; consumers branch on `data.messageStubType`)
+          // and then `continue` — the downstream pipeline assumes `message`
+          // non-null and would crash on stubs.
+          const isStubEvent =
+            received?.messageStubType !== null &&
+            received?.messageStubType !== undefined &&
+            !received?.message;
+          if (isStubEvent) {
+            this.sendDataWebhook(Events.MESSAGES_UPSERT, received);
+            continue;
+          }
+
           if ((type !== 'notify' && type !== 'append') || editedMessage || !received?.message) {
             continue;
           }
