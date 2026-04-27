@@ -656,7 +656,16 @@ export class BaileysStartupService extends ChannelStartupService {
       connectTimeoutMs: 30_000,
       keepAliveIntervalMs: 30_000,
       qrTimeout: 45_000,
-      emitOwnEvents: false,
+      // emitOwnEvents: true — by default Baileys silences events caused by
+      // the paired instance itself (rename group, add/remove member, react,
+      // etc done in the official WhatsApp app). For CRMs that want to track
+      // user actions in the paired phone — and treat the paired account as a
+      // first-class "agent" alongside in-app conversations — we want those
+      // events. Mainstream Evolution kept this `false` to avoid echo loops,
+      // but we already discriminate echoes via `key.fromMe` and via
+      // `whatsapp_sync` source markers in the consuming CRM, so the loop
+      // concern doesn't apply.
+      emitOwnEvents: true,
       shouldIgnoreJid: (jid) => {
         if (this.localSettings.syncFullHistory && isJidGroup(jid)) {
           return false;
