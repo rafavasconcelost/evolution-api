@@ -1955,6 +1955,22 @@ export class BaileysStartupService extends ChannelStartupService {
 
             if (events['message-receipt.update']) {
               const payload = events['message-receipt.update'] as MessageUserReceiptUpdate[];
+
+              // Forward raw per-participant receipts to the webhook BEFORE the
+              // internal aggregate update. Mainstream Evolution swallows this
+              // event and only updates a chat-wide read marker via
+              // `updateMessagesReadedByTimestamp`, which loses per-participant
+              // data — making it impossible for downstream consumers to compute
+              // group ticks (delivered/read/played require ALL members to ack).
+              //
+              // Shape: array of { key: WAMessageKey, receipt: IUserReceipt }.
+              // `key.id` identifies the message; `receipt.userJid` identifies
+              // the participant; `receiptTimestamp` = delivered, `readTimestamp`
+              // = read, `playedTimestamp` = played (audio). Consumer maintains
+              // a per-(message, participant) table and recomputes the visible
+              // aggregate when each receipt arrives.
+              this.sendDataWebhook(Events.MESSAGE_RECEIPT_UPDATE, payload);
+
               const remotesJidMap: Record<string, number> = {};
 
               for (const event of payload) {

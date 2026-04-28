@@ -13,6 +13,12 @@ export enum Events {
   MESSAGES_UPSERT = 'messages.upsert',
   MESSAGES_EDITED = 'messages.edited',
   MESSAGES_UPDATE = 'messages.update',
+  // Per-participant ACKs in groups (Baileys emits separately from messages.update,
+  // which is only emitted for DMs). Each receipt carries `userJid` + per-action
+  // timestamp (`receiptTimestamp` = delivered, `readTimestamp` = read,
+  // `playedTimestamp` = audio played). Aggregating into the visible "all delivered/
+  // all read" tick requires the consumer to know who's in the group.
+  MESSAGE_RECEIPT_UPDATE = 'message-receipt.update',
   MESSAGES_DELETE = 'messages.delete',
   SEND_MESSAGE = 'send.message',
   SEND_MESSAGE_UPDATE = 'send.message.update',
