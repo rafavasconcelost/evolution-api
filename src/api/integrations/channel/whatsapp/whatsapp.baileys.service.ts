@@ -1095,6 +1095,18 @@ export class BaileysStartupService extends ChannelStartupService {
     ) => {
       try {
         for (const received of messages) {
+          // [VIEW_ONCE_DIAG] temporary log to investigate why view-once messages
+          // never reach sendDataWebhook. Logs the shape of every incoming message
+          // BEFORE any filter so we can see if view-once arrives and where it's dropped.
+          // Remove after diagnosis.
+          this.logger.info(
+            `[VIEW_ONCE_DIAG] type=${type} keyId=${received?.key?.id} fromMe=${received?.key?.fromMe} ` +
+              `remoteJid=${received?.key?.remoteJid} hasMessage=${!!received?.message} ` +
+              `messageKeys=${received?.message ? Object.keys(received.message).join(',') : 'null'} ` +
+              `stubType=${received?.messageStubType ?? 'null'} ` +
+              `stubParams=${JSON.stringify(received?.messageStubParameters ?? null)}`,
+          );
+
           if (
             received?.messageStubParameters?.some?.((param) =>
               [
@@ -1109,6 +1121,7 @@ export class BaileysStartupService extends ChannelStartupService {
               ].some((err) => param?.includes?.(err)),
             )
           ) {
+            this.logger.warn(`[VIEW_ONCE_DIAG] DROP_BY_STUB_PARAMS keyId=${received?.key?.id}`);
             this.logger.warn(`Message ignored with messageStubParameters: ${JSON.stringify(received, null, 2)}`);
             continue;
           }
@@ -1193,6 +1206,10 @@ export class BaileysStartupService extends ChannelStartupService {
           }
 
           if ((type !== 'notify' && type !== 'append') || editedMessage || !received?.message) {
+            this.logger.warn(
+              `[VIEW_ONCE_DIAG] DROP_BY_TYPE_OR_EDITED_OR_NULL_MSG keyId=${received?.key?.id} ` +
+                `type=${type} hasEdited=${!!editedMessage} hasMessage=${!!received?.message}`,
+            );
             continue;
           }
 
@@ -1509,6 +1526,10 @@ export class BaileysStartupService extends ChannelStartupService {
           }
           console.log(messageRaw);
 
+          this.logger.info(
+            `[VIEW_ONCE_DIAG] REACHED_SEND_WEBHOOK keyId=${messageRaw?.key?.id} ` +
+              `messageType=${messageRaw?.messageType}`,
+          );
           this.sendDataWebhook(Events.MESSAGES_UPSERT, messageRaw);
 
           await chatbotController.emit({
