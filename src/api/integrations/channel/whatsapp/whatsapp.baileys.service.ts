@@ -1095,24 +1095,20 @@ export class BaileysStartupService extends ChannelStartupService {
     ) => {
       try {
         for (const received of messages) {
-          // [VIEW_ONCE_DIAG] temporary log to investigate why view-once messages
-          // never reach sendDataWebhook. Logs the shape of every incoming message
-          // BEFORE any filter so we can see if view-once arrives and where it's dropped.
-          // Remove after diagnosis.
-          this.logger.info(
-            `[VIEW_ONCE_DIAG] type=${type} keyId=${received?.key?.id} fromMe=${received?.key?.fromMe} ` +
-              `remoteJid=${received?.key?.remoteJid} hasMessage=${!!received?.message} ` +
-              `messageKeys=${received?.message ? Object.keys(received.message).join(',') : 'null'} ` +
-              `stubType=${received?.messageStubType ?? 'null'} ` +
-              `stubParams=${JSON.stringify(received?.messageStubParameters ?? null)}`,
-          );
-          // [VIEW_ONCE_DIAG_FULL] dump the entire received object for null-message
-          // cases. View-once messages arrive with message=null but may carry signals
-          // in other fields (mediaCiphertextSha256, key.viewOnce, broadcast, etc).
-          if (!received?.message && !received?.messageStubType) {
-            this.logger.info(
-              `[VIEW_ONCE_DIAG_FULL] keyId=${received?.key?.id} payload=${JSON.stringify(received, null, 0)}`,
-            );
+          // View-once messages from inbound paired sessions (e.g. Evolution as
+          // secondary device) arrive WITHOUT payload (received.message=null) by
+          // WhatsApp protocol design — the primary device (e.g. user's phone)
+          // gets the actual encrypted content; secondary paired sessions only
+          // receive a notification stub. Baileys signals this via the explicit
+          // key.isViewOnce=true flag, which never appears in regular messages.
+          //
+          // Without this branch, the !received?.message guard at line ~1195
+          // silently drops the event and the CRM never learns a view-once
+          // arrived. Forward the raw stub payload so consumers can render a
+          // "view-once received — open in WhatsApp" notice in their timeline.
+          if (received?.key?.isViewOnce && !received?.message) {
+            this.sendDataWebhook(Events.MESSAGES_UPSERT, received);
+            continue;
           }
 
           if (
@@ -1129,7 +1125,6 @@ export class BaileysStartupService extends ChannelStartupService {
               ].some((err) => param?.includes?.(err)),
             )
           ) {
-            this.logger.warn(`[VIEW_ONCE_DIAG] DROP_BY_STUB_PARAMS keyId=${received?.key?.id}`);
             this.logger.warn(`Message ignored with messageStubParameters: ${JSON.stringify(received, null, 2)}`);
             continue;
           }
@@ -1214,10 +1209,6 @@ export class BaileysStartupService extends ChannelStartupService {
           }
 
           if ((type !== 'notify' && type !== 'append') || editedMessage || !received?.message) {
-            this.logger.warn(
-              `[VIEW_ONCE_DIAG] DROP_BY_TYPE_OR_EDITED_OR_NULL_MSG keyId=${received?.key?.id} ` +
-                `type=${type} hasEdited=${!!editedMessage} hasMessage=${!!received?.message}`,
-            );
             continue;
           }
 
@@ -1534,10 +1525,6 @@ export class BaileysStartupService extends ChannelStartupService {
           }
           console.log(messageRaw);
 
-          this.logger.info(
-            `[VIEW_ONCE_DIAG] REACHED_SEND_WEBHOOK keyId=${messageRaw?.key?.id} ` +
-              `messageType=${messageRaw?.messageType}`,
-          );
           this.sendDataWebhook(Events.MESSAGES_UPSERT, messageRaw);
 
           await chatbotController.emit({
