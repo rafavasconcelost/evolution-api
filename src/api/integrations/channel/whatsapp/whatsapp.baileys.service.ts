@@ -1106,6 +1106,14 @@ export class BaileysStartupService extends ChannelStartupService {
               `stubType=${received?.messageStubType ?? 'null'} ` +
               `stubParams=${JSON.stringify(received?.messageStubParameters ?? null)}`,
           );
+          // [VIEW_ONCE_DIAG_FULL] dump the entire received object for null-message
+          // cases. View-once messages arrive with message=null but may carry signals
+          // in other fields (mediaCiphertextSha256, key.viewOnce, broadcast, etc).
+          if (!received?.message && !received?.messageStubType) {
+            this.logger.info(
+              `[VIEW_ONCE_DIAG_FULL] keyId=${received?.key?.id} payload=${JSON.stringify(received, null, 0)}`,
+            );
+          }
 
           if (
             received?.messageStubParameters?.some?.((param) =>
