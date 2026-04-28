@@ -65,6 +65,11 @@ class Key {
   id: string;
   fromMe: boolean;
   remoteJid: string;
+  // OBRIGATÓRIO em mensagens de GRUPO (@g.us): JID do participante que
+  // originou a msg. Sem isso, sock.readMessages() em grupo é silenciosamente
+  // ignorado pelo WhatsApp — destinatário continua vendo apenas 2 ticks
+  // cinza em vez de 2 azul. Em DMs é ignorado.
+  participant?: string;
 }
 export class ReadMessageDto {
   readMessages: Key[];

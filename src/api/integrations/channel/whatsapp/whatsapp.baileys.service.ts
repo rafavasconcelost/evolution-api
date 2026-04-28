@@ -3723,7 +3723,18 @@ export class BaileysStartupService extends ChannelStartupService {
       const keys: proto.IMessageKey[] = [];
       data.readMessages.forEach((read) => {
         if (isJidGroup(read.remoteJid) || isPnUser(read.remoteJid)) {
-          keys.push({ remoteJid: read.remoteJid, fromMe: read.fromMe, id: read.id });
+          // BUGFIX: incluir `participant` quando presente. Mainstream Evolution
+          // descartava esse campo, fazendo `sock.readMessages()` em grupos
+          // ser silenciosamente ignorado pelo WhatsApp (sender continuava
+          // vendo 2 ticks cinza). Em DMs `participant` chega undefined e
+          // o spread vira no-op (Baileys aceita objeto sem o campo).
+          const key: proto.IMessageKey = {
+            remoteJid: read.remoteJid,
+            fromMe: read.fromMe,
+            id: read.id,
+          };
+          if (read.participant) key.participant = read.participant;
+          keys.push(key);
         }
       });
       await this.client.readMessages(keys);
