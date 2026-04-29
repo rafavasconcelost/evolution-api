@@ -2256,7 +2256,16 @@ export class BaileysStartupService extends ChannelStartupService {
     }
 
     if (message['conversation']) {
-      return await this.client.sendMessage(
+      // [MENTIONS_DEBUG] log final shape passed to Baileys client.sendMessage
+      console.log('[MENTIONS_DEBUG_BAILEYS_CALL]', JSON.stringify({
+        sender,
+        text: message['conversation'],
+        mentions,
+        mentions_length: mentions?.length ?? null,
+        linkPreview,
+        contextInfo: message['contextInfo'],
+      }));
+      const result = await this.client.sendMessage(
         sender,
         {
           text: message['conversation'],
@@ -2266,6 +2275,13 @@ export class BaileysStartupService extends ChannelStartupService {
         } as unknown as AnyMessageContent,
         option as unknown as MiscMessageGenerationOptions,
       );
+      // [MENTIONS_DEBUG] log what Baileys returned (especially message.extendedTextMessage.contextInfo)
+      console.log('[MENTIONS_DEBUG_BAILEYS_RESULT]', JSON.stringify({
+        messageType: result?.message ? Object.keys(result.message)[0] : null,
+        extendedTextMessage_contextInfo: (result?.message as any)?.extendedTextMessage?.contextInfo ?? null,
+        conversation: (result?.message as any)?.conversation ?? null,
+      }));
+      return result;
     }
 
     if (!message['audio'] && !message['poll'] && !message['sticker'] && sender != 'status@broadcast') {
@@ -2459,6 +2475,18 @@ export class BaileysStartupService extends ChannelStartupService {
             groupMentions: [],
           };
         }
+
+        // [MENTIONS_DEBUG] runtime trace pra diagnosticar por que recipient
+        // WhatsApp não vê chip mesmo com mentions populados.
+        console.log('[MENTIONS_DEBUG_GROUP_PATH]', JSON.stringify({
+          sender,
+          message_keys: Object.keys(message ?? {}),
+          message_conversation: (message as Record<string, unknown>)?.conversation ?? null,
+          mentions_arg: mentions,
+          mentions_length: mentions?.length ?? null,
+          contextInfo_built: contextInfo,
+          options_mentioned: options?.mentioned,
+        }));
 
         messageSent = await this.sendMessage(
           sender,
