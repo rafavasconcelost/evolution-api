@@ -2445,6 +2445,21 @@ export class BaileysStartupService extends ChannelStartupService {
           });
         }
 
+        // Build contextInfo with mentionedJid so Baileys propagates the
+        // mention chip via XMPP. Without this, passing `mentions` only
+        // as 3rd arg to client.sendMessage doesn't reliably surface as
+        // contextInfo.mentionedJid in groups with LID privacy — recipient
+        // sees plain `@<digits>` text without the chip render.
+        // Mirrors the DM path (line ~2459) but populates the array
+        // instead of leaving it empty. Filters null entries (group JIDs
+        // that createJid rejects).
+        if (mentions?.length) {
+          contextInfo = {
+            mentionedJid: mentions.filter((jid) => jid !== null),
+            groupMentions: [],
+          };
+        }
+
         messageSent = await this.sendMessage(
           sender,
           message,
@@ -2453,6 +2468,7 @@ export class BaileysStartupService extends ChannelStartupService {
           quoted,
           null,
           group?.ephemeralDuration,
+          contextInfo,
           // group?.participants,
         );
       } else {
